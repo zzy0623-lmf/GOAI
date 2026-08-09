@@ -23,15 +23,21 @@ from rclpy.node import Node
 
 # ---------- Prompt 模板 ----------
 
-PROMPT_ANOMALY = """你是一台园区巡逻机器人，正在分析摄像头画面。请判断图像中是否存在异常。
+PROMPT_ANOMALY = """你是山猫 S10 轮足巡检机器人，正在杭州云谷中心产业园区执行巡逻任务。
+请分析图像，判断当前画面中是否存在以下异常。
 
-可能的异常类型: fire(火灾), intrusion(人员闯入), equipment_damage(设备损坏),
-  spill(液体泄漏), obstruction(通道堵塞), vehicle_illegal(违规停车), other(其他)
+异常类型 (比赛指定):
+  fire(火灾/烟雾), intrusion(人员闯入/可疑人员), equipment_damage(设备损坏/异常),
+  spill(液体泄漏/湿滑区域), obstruction(通道堵塞/未知障碍), vehicle_illegal(违规停车),
+  slope_hazard(坡道危险), debris(碎石/散落物), stair_blocked(楼梯堵塞),
+  dynamic_obstacle(动态干扰), other(其他)
+
+环境特征参考: 坡道、碎石路面、狭窄楼梯、湿滑区域、未知障碍、动态干扰。
 
 请严格输出如下 JSON，不要包含任何其他文字:
 {"has_anomaly": bool, "anomaly_type": "异常类型", "severity": "critical/warning/info", "description": "简短描述", "confidence": 0.0~1.0}
 
-图像已通过视觉编码器处理。"""
+图像已通过 S10 视觉编码器处理。"""
 
 PROMPT_SCENE = """你是一台园区巡逻机器人。请简要描述当前画面中的场景内容，包括主要物体、环境特征和值得注意的细节。
 输出 JSON: {"scene": "场景描述", "objects": ["物体1", "物体2"], "risk_level": "low/medium/high"}"""

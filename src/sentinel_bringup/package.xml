@@ -1,0 +1,20 @@
+<?xml version="1.0"?>
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
+<package format="3">
+  <name>sentinel_bringup</name>
+  <version>0.1.0</version>
+  <description>哨兵系统总启动 (GOAI 比赛版)</description>
+  <maintainer email="dev@sentinel.com">Sentinel Team</maintainer>
+  <license>Apache-2.0</license>
+
+  <exec_depend>rclpy</exec_depend>
+  <exec_depend>sentinel_detector</exec_depend>
+  <exec_depend>sentinel_vlm</exec_depend>
+  <exec_depend>sentinel_arbitrator</exec_depend>
+  <exec_depend>sentinel_report</exec_depend>
+  <exec_depend>sentinel_mission</exec_depend>
+
+  <export>
+    <build_type>ament_python</build_type>
+  </export>
+</package>

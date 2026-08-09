@@ -17,19 +17,20 @@ from std_srvs.srv import Trigger
 from sentinel_interfaces.msg import AnomalyEvent
 
 # ==================== 预设巡检点 ====================
-# 坐标以某园区为参考 (上海张江)
+# 坐标: 杭州云谷中心 GOAI 比赛场地 (西湖区灯彩街1009号)
 
 DEFAULT_WAYPOINTS = [
-    {'id': 1, 'name': '正门岗亭',     'lat': 31.2045, 'lng': 121.5850, 'priority': 3, 'dwell': 10},
-    {'id': 2, 'name': '研发楼A栋',    'lat': 31.2050, 'lng': 121.5860, 'priority': 3, 'dwell': 10},
-    {'id': 3, 'name': '数据中心',     'lat': 31.2040, 'lng': 121.5870, 'priority': 5, 'dwell': 15},
-    {'id': 4, 'name': '停车场',       'lat': 31.2035, 'lng': 121.5845, 'priority': 3, 'dwell': 10},
-    {'id': 5, 'name': '配电站',       'lat': 31.2055, 'lng': 121.5855, 'priority': 5, 'dwell': 15},
+    {'id': 1, 'name': '园区主入口',    'lat': 30.3185, 'lng': 120.0690, 'priority': 3, 'dwell': 10},
+    {'id': 2, 'name': '研发楼A栋',     'lat': 30.3190, 'lng': 120.0695, 'priority': 3, 'dwell': 10},
+    {'id': 3, 'name': '数据中心/机房',  'lat': 30.3180, 'lng': 120.0700, 'priority': 5, 'dwell': 15},
+    {'id': 4, 'name': '地下停车场入口',  'lat': 30.3175, 'lng': 120.0685, 'priority': 3, 'dwell': 10},
+    {'id': 5, 'name': '配电站/设备区',   'lat': 30.3195, 'lng': 120.0695, 'priority': 5, 'dwell': 15},
 ]
 
-ALERT_RADIUS_M  = 50.0    # 告警影响半径
+ALERT_RADIUS_M  = 30.0    # 告警影响半径 (园区尺度适配)
 ALERT_PRIORITY  = 1       # 告警时设为此值
 MAX_DWELL       = 60      # dwell 上限 (秒)
+ROBOT_MAX_SPEED = 8.0     # 山猫 S10 最高速度 m/s
 
 
 class TaskScheduler(Node):

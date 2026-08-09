@@ -1,0 +1,19 @@
+# Sentinel — GOAI 产业园区全地形巡逻系统
+# Python 依赖
+
+# ROS 2 (系统安装, 不在此列表)
+# rclpy, sensor_msgs, std_msgs, cv_bridge, std_srvs
+
+# YOLO 快速检测
+ultralytics>=8.0.0
+opencv-python>=4.5.0
+
+# VLM 推理 (GGUF)
+llama-cpp-python>=0.2.0
+
+# 图像处理
+numpy>=1.21.0
+Pillow>=9.0.0
+
+# 工具
+uuid

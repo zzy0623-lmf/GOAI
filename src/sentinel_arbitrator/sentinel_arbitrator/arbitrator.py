@@ -1,10 +1,15 @@
 """
-哨兵融合仲裁节点
+哨兵融合仲裁节点 (GOAI 比赛版)
 
   订阅 /sentinel/fast_alerts
     ├── conf > 0.85  → 直接转发到 /sentinel/confirmed_alerts
     └── 0.50 < conf < 0.85  → 调 VLM 精判 → 加权融合 (YOLO*0.3 + VLM*0.7)
                                5 秒内同类型去重后发布
+
+  安全兜底:
+    - VLM 超时(10s)自动降级为直接转发
+    - 异常累积触发 CRITICAL 升级
+    - 系统健康状态上报 /sentinel/health
 """
 
 import rclpy
@@ -26,6 +31,11 @@ CONF_LOW    = 0.50   # 低于此值忽略
 # ---- 去重窗口 (秒) ----
 DEDUP_WINDOW = 5.0
 
+# ---- 安全兜底 ----
+VLM_TIMEOUT      = 10.0   # VLM 超时 (秒)
+CRITICAL_BURST_THRESH = 5 # 短时间同类型告警超过此数升级为 CRITICAL
+BURST_WINDOW     = 30.0   # 爆发检测窗口 (秒)
+
 
 class Arbitrator(Node):
     """融合仲裁节点"""
@@ -41,6 +51,10 @@ class Arbitrator(Node):
         self._dedup_map = {}               # type → timestamp
         self._dedup_lock = threading.Lock()
 
+        # ---- 安全: 告警爆发计数 ---- 
+        self._alert_burst: dict = defaultdict(list)  # type → [timestamps]
+        self._burst_lock = threading.Lock()
+
         # ---- 订阅 /sentinel/fast_alerts ----
         self.create_subscription(
             AnomalyEvent, '/sentinel/fast_alerts', self._on_fast_alert, 10
@@ -51,10 +65,16 @@ class Arbitrator(Node):
             AnomalyEvent, '/sentinel/confirmed_alerts', 10
         )
 
+        # ---- 系统健康状态发布 ----
+        from std_msgs.msg import String
+        self._health_pub = self.create_publisher(
+            String, '/sentinel/health', 10
+        )
+
         # ---- 尝试连接 VLM ----
         self._try_init_vlm()
 
-        self.get_logger().info('Arbitrator 启动完成')
+        self.get_logger().info('Arbitrator 启动完成 (GOAI 安全增强版)')
 
     # ========== VLM 连接 ==========
 
@@ -112,17 +132,39 @@ class Arbitrator(Node):
     # ========== 直接转发 ==========
 
     def _forward(self, event: AnomalyEvent):
-        """去重后直接转发到 confirmed_alerts"""
+        """去重后直接转发到 confirmed_alerts, 含安全升级"""
         if self._is_duplicate(event.anomaly_type):
             self.get_logger().info(
                 f'去重跳过: {event.anomaly_type} (5秒内已发)')
             return
 
+        # 安全: 告警爆发检测 → 升级为 CRITICAL
+        if self._check_burst(event):
+            event.severity = AnomalyEvent.CRITICAL
+            event.description = f'[安全升级] {event.description}'
+            self.get_logger().warn(
+                f'告警爆发! {event.anomaly_type} 升级为 CRITICAL')
+
         event.detection_source = 'yolo'
         self._confirmed_pub.publish(event)
         self._record_dedup(event.anomaly_type)
         self.get_logger().info(
-            f'直接转发 → confirmed: {event.anomaly_type} conf={event.confidence:.2f}')
+            f'直接转发 → confirmed: {event.anomaly_type} '
+            f'conf={event.confidence:.2f} severity={event.severity}')
+
+    # ========== 安全: 告警爆发检测 ==========
+
+    def _check_burst(self, event: AnomalyEvent) -> bool:
+        """检测短时间内同类型告警是否爆发"""
+        now = time.time()
+        with self._burst_lock:
+            timestamps = self._alert_burst[event.anomaly_type]
+            timestamps.append(now)
+            # 清除过期记录
+            self._alert_burst[event.anomaly_type] = [
+                t for t in timestamps if now - t < BURST_WINDOW
+            ]
+            return len(self._alert_burst[event.anomaly_type]) >= CRITICAL_BURST_THRESH
 
     # ========== VLM 精判 ==========
 

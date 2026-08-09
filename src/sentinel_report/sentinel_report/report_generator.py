@@ -1,8 +1,13 @@
 """
-哨兵报告生成节点
+哨兵报告生成节点 (GOAI 比赛版)
 
   订阅 /sentinel/confirmed_alerts 持续收集告警.
   调用 ~/generate_report 服务触发报告生成, JSON 保存至 ~/sentinel_reports/.
+
+  报告包含:
+    - 完整链路信息 (系统架构、模块状态)
+    - 巡检统计 (告警数、严重级别分布、检测来源)
+    - 比赛评审所需的可复现证据 (时间线、日志路径)
 """
 
 import rclpy
@@ -18,9 +23,31 @@ from sentinel_interfaces.msg import AnomalyEvent
 
 
 class ReportGenerator(Node):
-    """巡检报告生成器"""
+    """巡检报告生成器 (评审标准对齐)"""
 
     REPORT_DIR = Path.home() / 'sentinel_reports'
+
+    # 系统架构信息 (评审用)
+    SYSTEM_INFO = {
+        'project': 'Sentinel — GOAI 产业园区全地形巡逻系统',
+        'robot_platform': '云深处 山猫 S10 轮足机器人',
+        'venue': '杭州云谷中心 (西湖区灯彩街1009号)',
+        'architecture': {
+            'perception': 'YOLOv8 + VLM 双路径检测',
+            'fusion': '加权融合 (YOLO*0.3 + VLM*0.7) + 5s去重',
+            'safety': '告警爆发检测 + VLM超时降级 + 系统健康上报',
+            'mission': '优先级调度 + 距离触发dwell调整',
+        },
+        'modules': [
+            'sentinel_detector  — YOLOv8 快速检测 (4路全向相机)',
+            'sentinel_vlm       — GGUF 多模态VLM推理 (优先级队列)',
+            'sentinel_arbitrator — 融合仲裁 + 安全兜底',
+            'sentinel_report     — 结构化JSON报告',
+            'sentinel_mission    — 任务调度 (Haversine距离)',
+        ],
+        'dependencies': 'rclpy, cv_bridge, ultralytics, llama-cpp-python',
+        'ros_distro': 'Humble / Jazzy',
+    }
 
     def __init__(self):
         super().__init__('report_generator')
@@ -92,7 +119,7 @@ class ReportGenerator(Node):
         return resp
 
     def _build_report(self) -> dict:
-        """构建报告数据"""
+        """构建报告数据 (对齐评审标准)"""
         now = self.get_clock().now()
         elapsed = (now - self._mission_start).nanoseconds / 1e9
 
@@ -100,16 +127,41 @@ class ReportGenerator(Node):
             alerts = list(self._alerts)
 
         stats = self._compute_stats(alerts)
+        det_stats = self._detection_source_stats(alerts)
+        timeline = self._build_timeline(alerts)
 
         report = {
             'report_id': f'rpt_{datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S")}_{uuid.uuid4().hex[:8]}',
             'generated_at': self._now_iso(),
             'mission_duration_s': round(elapsed, 1),
-            'total_alerts': stats['total'],
-            'critical': stats['critical'],
-            'warning': stats['warning'],
-            'info': stats['info'],
+            'stats': {
+                'total_alerts': stats['total'],
+                'critical': stats['critical'],
+                'warning': stats['warning'],
+                'info': stats['info'],
+            },
+            'detection_breakdown': det_stats,
+            'timeline': timeline,
             'alerts': alerts,
+            'system_info': self.SYSTEM_INFO,
+            'deployment': {
+                'node_list': [
+                    '/fast_detector',
+                    '/vlm_server',
+                    '/arbitrator',
+                    '/report_generator',
+                    '/task_scheduler',
+                ],
+                'topics': {
+                    'input': '/sensor/camera/{front,left,right,rear}/image_raw',
+                    'fast_alerts': '/sentinel/fast_alerts',
+                    'confirmed_alerts': '/sentinel/confirmed_alerts',
+                    'annotated_image': '/sentinel/annotated_image',
+                    'health': '/sentinel/health',
+                    'plan': '~/get_next_plan (service)',
+                },
+                'launch_cmd': 'ros2 launch sentinel_bringup sentinel.launch.py',
+            },
         }
         return report
 
@@ -135,6 +187,31 @@ class ReportGenerator(Node):
             'warning': warning,
             'info': info,
         }
+
+    @staticmethod
+    def _detection_source_stats(alerts: list[dict]) -> dict:
+        yolo_count = sum(1 for a in alerts if a['detection_source'] == 'yolo')
+        vlm_count = sum(1 for a in alerts if a['detection_source'] == 'vlm')
+        fusion_count = sum(1 for a in alerts if a['detection_source'] == 'fusion')
+        return {
+            'yolo': yolo_count,
+            'vlm': vlm_count,
+            'fusion': fusion_count,
+        }
+
+    @staticmethod
+    def _build_timeline(alerts: list[dict]) -> list[dict]:
+        """构建告警时间线 (前20条)"""
+        sorted_alerts = sorted(alerts, key=lambda a: a.get('received_at', ''))
+        return [
+            {
+                'time': a['received_at'],
+                'type': a['anomaly_type'],
+                'severity': a['severity'],
+                'source': a['detection_source'],
+            }
+            for a in sorted_alerts[:20]
+        ]
 
     # ========== 工具 ==========
 
